@@ -1,0 +1,26 @@
+{
+    "name": "ai-pr-reviewer",
+    "description": "AI-powered Azure DevOps pull request reviewer that provides suggestions, guidance, and annotated feedback for PRs.",
+    "version": "1.0.0",
+    "author": {
+        "name": "cuteribs"
+    },
+    "keywords": [
+        "ai-pr-reviewer",
+        "azure-devops",
+        "ai",
+        "code-review"
+    ],
+    "mcpServers": {
+        "adp-pr-helper": {
+            "command": "npx",
+            "args": [
+                "dnx",
+                "-y",
+                "AdoPrHelperMcp",
+                "-a",
+                "pat"
+            ]
+        }
+    }
+}

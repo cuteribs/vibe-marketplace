@@ -1,0 +1,40 @@
+{
+	"nodes":[
+		{"id":"f789408731710c87","x":1160,"y":720,"width":860,"height":420,"type":"group","label":"Subagents"},
+		{"id":"subagent-1","type":"text","text":"## Sub-agent 1\n\n- Read batch-1-dotnet.json\n- Read dotnet-guidelines\n- Review & post comments","x":1200,"y":740,"width":280,"height":160},
+		{"id":"subagent-n","type":"text","text":"## Sub-agent N\n\n- Read batch-N-*.json\n- Read relevant guidelines\n- Review & post comments","x":1520,"y":740,"width":280,"height":160},
+		{"id":"note-parallel","type":"text","text":"**All sub-agents run simultaneously in background**","x":1800,"y":1060,"width":200,"height":80},
+		{"id":"mcp-comment","type":"text","text":"## MCP Post Comment\n\n`azure_devops_post_comment`\n\n- file_path, line_number\n- severity, comment_text","x":1200,"y":920,"width":320,"height":180},
+		{"id":"guidelines","type":"text","text":"## references/\n\n- dotnet-guidelines.md\n- frontend-guidelines.md\n- python-guidelines.md\n- mcp-integration.md\n\n*Read by sub-agents*","x":1440,"y":320,"width":310,"height":220},
+		{"id":"batches-folder","type":"text","text":"## batches/\n\n```json\n// batch-1-dotnet.json\n{\n  \"batch_number\": 1,\n  \"tech_stack\": \"dotnet\",\n  \"files\": {\n    \"src/File.cs\": {\n      \"content\": \"...\",\n      \"diff\": \"...\"\n    }\n  }\n}\n```","x":1040,"y":180,"width":360,"height":360},
+		{"id":"consolidate","type":"text","text":"### Step 5: Consolidate\n\n1. Wait for all background tasks\n2. Read all summaries\n3. Aggregate findings\n4. Generate final report","x":335,"y":1010,"width":310,"height":200},
+		{"id":"summaries-folder","type":"text","text":"## summaries/\n\n```\nbatch-1-summary.md\nbatch-2-summary.md\nbatch-N-summary.md\n```\n\nWritten by each sub-agent","x":760,"y":1000,"width":280,"height":220},
+		{"id":"step1-parse","type":"text","text":"## Step 1: Parse PR URL\n\nExtract from URL:\n- organization\n- project\n- repository\n- pr_id","x":370,"y":-295,"width":310,"height":250},
+		{"id":"mcp-fetch","type":"text","text":"### Step 2: MCP Fetch\n\n`azure_devops_fetch_pr_changes`\n\n- Fetches all changed files\n- Saves to `{session}/pr-changes/`\n- Returns small summary only\n- Files stay on disk (not in context)","x":350,"y":0,"width":350,"height":250},
+		{"id":"user-request","type":"text","text":"## User Request\n\nPR URL from Azure DevOps","x":-130,"y":-165,"width":280,"height":95},
+		{"id":"main-agent","type":"text","text":"## Main Agent\n\n- Orchestrates workflow\n- Parses PR URL\n- Spawns sub-agents\n- Consolidates reports","x":-120,"y":70,"width":260,"height":190},
+		{"id":"final-report","type":"text","text":"## Final Report\n\n- Total findings by severity\n- Critical issues list\n- Patterns & recommendations\n- Per-tech-stack breakdown","x":-130,"y":780,"width":280,"height":220},
+		{"id":"batch-script","type":"text","text":"### Step 3: batch_files.py\n\n1. Read manifest.json\n2. Group by tech stack\n3. Read file content & diffs\n4. Embed in batch JSON\n5. **Delete source files**\n6. Write batch-N-stack.json","x":383,"y":320,"width":285,"height":260},
+		{"id":"spawn-subagents","type":"text","text":"### Step 4: Spawn Sub-agents\n\n**Parallel Background Tasks**\n\nLaunch ALL in single message:\n- `run_in_background: true`\n- `subagent_type: general-purpose`","x":351,"y":640,"width":350,"height":220},
+		{"id":"pr-changes-folder","type":"text","text":"## pr-changes/\n\n```\nmanifest.json\nsrc~~~file.cs\nsrc~~~file.cs.diff\n...\n```\n\n*Files deleted after batching*","x":880,"y":-140,"width":250,"height":140}
+	],
+	"edges":[
+		{"id":"edge-user-main","fromNode":"user-request","fromSide":"bottom","toNode":"main-agent","toSide":"top","label":"PR URL"},
+		{"id":"edge-main-parse","fromNode":"main-agent","fromSide":"right","toNode":"step1-parse","toSide":"left"},
+		{"id":"edge-parse-mcp","fromNode":"step1-parse","fromSide":"bottom","toNode":"mcp-fetch","toSide":"top"},
+		{"id":"edge-mcp-prchanges","fromNode":"mcp-fetch","fromSide":"right","toNode":"pr-changes-folder","toSide":"left","label":"saves files"},
+		{"id":"edge-mcp-batch","fromNode":"mcp-fetch","fromSide":"bottom","toNode":"batch-script","toSide":"top"},
+		{"id":"edge-prchanges-batch","fromNode":"pr-changes-folder","fromSide":"bottom","toNode":"batch-script","toSide":"right","label":"reads & deletes"},
+		{"id":"edge-batch-batches","fromNode":"batch-script","fromSide":"right","toNode":"batches-folder","toSide":"left","label":"creates"},
+		{"id":"edge-batch-spawn","fromNode":"batch-script","fromSide":"bottom","toNode":"spawn-subagents","toSide":"top"},
+		{"id":"edge-subn-mcp","fromNode":"subagent-n","fromSide":"bottom","toNode":"mcp-comment","toSide":"right"},
+		{"id":"edge-summaries-consolidate","fromNode":"summaries-folder","fromSide":"left","toNode":"consolidate","toSide":"right","label":"reads"},
+		{"id":"edge-spawn-consolidate","fromNode":"spawn-subagents","fromSide":"bottom","toNode":"consolidate","toSide":"top","label":"waits"},
+		{"id":"edge-consolidate-report","fromNode":"consolidate","fromSide":"left","toNode":"final-report","toSide":"right","label":"generates"},
+		{"id":"edge-report-main","fromNode":"final-report","fromSide":"top","toNode":"main-agent","toSide":"bottom","label":"returns"},
+		{"id":"b4f8c9f682732004","fromNode":"spawn-subagents","fromSide":"right","toNode":"f789408731710c87","toSide":"left"},
+		{"id":"13ce61a5b5ae0f44","fromNode":"guidelines","fromSide":"bottom","toNode":"f789408731710c87","toSide":"top"},
+		{"id":"aa28423c4ac99173","fromNode":"batches-folder","fromSide":"bottom","toNode":"f789408731710c87","toSide":"top"},
+		{"id":"e6bdc3f94148f3fd","fromNode":"f789408731710c87","fromSide":"left","toNode":"summaries-folder","toSide":"right"}
+	]
+}

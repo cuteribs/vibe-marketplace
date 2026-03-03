@@ -1,0 +1,245 @@
+name: Sync ui-ux-pro-max plugin from Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  repository_dispatch:
+    types: [sync-ui-ux-pro-max]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    name: Sync Plugin Files and Metadata
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download upstream repo as zip
+        run: |
+          set -euo pipefail
+          URL="https://github.com/nextlevelbuilder/ui-ux-pro-max-skill/archive/refs/heads/main.zip"
+          echo "Downloading $URL"
+          curl -fsSL -o upstream.zip "$URL"
+          mkdir -p tmp upstream-repo
+          unzip -q upstream.zip -d tmp
+          TOPDIR=$(find tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
+          if [ -z "$TOPDIR" ]; then
+            echo "ERROR: failed to unzip upstream archive"
+            exit 1
+          fi
+          rsync -a "$TOPDIR"/ upstream-repo/
+          echo "UPSTREAM_REPO_PATH=$(pwd)/upstream-repo" >> $GITHUB_ENV
+
+      - name: Extract upstream metadata
+        id: upstream_meta
+        run: |
+          # Extract version, description, keywords from upstream marketplace.json
+          if [ -f "$UPSTREAM_REPO_PATH/.claude-plugin/marketplace.json" ]; then
+            MARKETPLACE_FILE="$UPSTREAM_REPO_PATH/.claude-plugin/marketplace.json"
+          else
+            echo "ERROR: No marketplace.json found in upstream repo"
+            exit 1
+          fi
+
+          VERSION=$(jq -r '.plugins[] | select(.name == "ui-ux-pro-max") | .version' "$MARKETPLACE_FILE")
+          DESCRIPTION=$(jq -r '.plugins[] | select(.name == "ui-ux-pro-max") | .description' "$MARKETPLACE_FILE")
+          KEYWORDS=$(jq -c '.plugins[] | select(.name == "ui-ux-pro-max") | .keywords' "$MARKETPLACE_FILE")
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "keywords=$KEYWORDS" >> $GITHUB_OUTPUT
+
+          echo "Extracted metadata from upstream:"
+          echo "  Version: $VERSION"
+          echo "  Keywords: $KEYWORDS"
+
+      - name: Check if version is newer
+        id: version_check
+        env:
+          UPSTREAM_VERSION: ${{ steps.upstream_meta.outputs.version }}
+        run: |
+          LOCAL_MARKETPLACE_FILE=".claude-plugin/marketplace.json"
+          if [ ! -f "$LOCAL_MARKETPLACE_FILE" ]; then
+            echo "ERROR: Local marketplace.json not found"
+            exit 1
+          fi
+          
+          LOCAL_VERSION=$(jq -r '.plugins[] | select(.name == "ui-ux-pro-max") | .version' "$LOCAL_MARKETPLACE_FILE")
+          echo "Local version: $LOCAL_VERSION"
+          echo "Upstream version: $UPSTREAM_VERSION"
+          
+          # Compare versions (simple string comparison for semver)
+          if [ "$UPSTREAM_VERSION" = "$LOCAL_VERSION" ] || [ "$UPSTREAM_VERSION" = "" ]; then
+            echo "⚠ Upstream version is not newer than local version. Exiting."
+            exit 1
+          fi
+          
+          echo "is_newer=true" >> $GITHUB_OUTPUT
+          echo "✓ Version check passed: $LOCAL_VERSION -> $UPSTREAM_VERSION"
+
+      - name: Copy skill files (dereference symlinks)
+        run: |
+          # Create destination if not exists
+          mkdir -p plugins/ui-ux-pro-max/skills
+
+          # Copy all files from upstream .claude/skills/ to local plugins/ui-ux-pro-max/skills/
+          mkdir -p plugins/ui-ux-pro-max/.claude-plugin
+          cp "$UPSTREAM_REPO_PATH/.claude-plugin/plugin.json" "plugins/ui-ux-pro-max/.claude-plugin/plugin.json"
+          mkdir -p plugins/ui-ux-pro-max/.github/plugin
+          cp "$UPSTREAM_REPO_PATH/.claude-plugin/plugin.json" "plugins/ui-ux-pro-max/.github/plugin/plugin.json"
+          # Use rsync with -aL to follow symlinks
+          if [ -d "$UPSTREAM_REPO_PATH/.claude/skills/" ]; then
+            rsync -avL --delete "$UPSTREAM_REPO_PATH/.claude/skills/" "plugins/ui-ux-pro-max/skills/"
+            echo "✓ Copied skill files from upstream"
+          else
+            echo "WARNING: No .claude/skills/ directory found in upstream"
+          fi
+
+          # Verify copy
+          echo ""
+          echo "Contents of plugins/ui-ux-pro-max/skills/:"
+          ls -laR plugins/ui-ux-pro-max/skills/ | head -50
+
+      - name: Update plugin.json (ui-ux-pro-max)
+        env:
+          VERSION: ${{ steps.upstream_meta.outputs.version }}
+          DESCRIPTION: ${{ steps.upstream_meta.outputs.description }}
+          KEYWORDS: ${{ steps.upstream_meta.outputs.keywords }}
+        run: |
+          PLUGIN_FILE="plugins/ui-ux-pro-max/.github/plugin/plugin.json"
+          
+          if [ -f "$PLUGIN_FILE" ]; then
+            # Update version, description, and keywords using jq
+            jq \
+              --arg version "$VERSION" \
+              --arg description "$DESCRIPTION" \
+              --argjson keywords "$KEYWORDS" \
+              '.version = $version | .description = $description | .keywords = $keywords' \
+              "$PLUGIN_FILE" > "$PLUGIN_FILE.tmp"
+            
+            mv "$PLUGIN_FILE.tmp" "$PLUGIN_FILE"
+            echo "✓ Updated $PLUGIN_FILE"
+            echo "  New version: $VERSION"
+          else
+            echo "ERROR: $PLUGIN_FILE not found"
+            exit 1
+          fi
+
+      - name: Update .github/plugin/marketplace.json
+        env:
+          VERSION: ${{ steps.upstream_meta.outputs.version }}
+          DESCRIPTION: ${{ steps.upstream_meta.outputs.description }}
+          KEYWORDS: ${{ steps.upstream_meta.outputs.keywords }}
+        run: |
+          MARKETPLACE_FILE=".github/plugin/marketplace.json"
+          
+          if [ -f "$MARKETPLACE_FILE" ]; then
+            # Update the ui-ux-pro-max plugin entry
+            jq \
+              --arg version "$VERSION" \
+              --arg description "$DESCRIPTION" \
+              --argjson keywords "$KEYWORDS" \
+              '.plugins[] |= if .name == "ui-ux-pro-max" then 
+                .version = $version | 
+                .description = $description | 
+                .keywords = $keywords 
+              else . end' \
+              "$MARKETPLACE_FILE" > "$MARKETPLACE_FILE.tmp"
+            
+            mv "$MARKETPLACE_FILE.tmp" "$MARKETPLACE_FILE"
+            echo "✓ Updated $MARKETPLACE_FILE"
+          else
+            echo "ERROR: $MARKETPLACE_FILE not found"
+            exit 1
+          fi
+
+      - name: Update .claude-plugin/marketplace.json
+        env:
+          VERSION: ${{ steps.upstream_meta.outputs.version }}
+          DESCRIPTION: ${{ steps.upstream_meta.outputs.description }}
+          KEYWORDS: ${{ steps.upstream_meta.outputs.keywords }}
+        run: |
+          MARKETPLACE_FILE=".claude-plugin/marketplace.json"
+          
+          if [ -f "$MARKETPLACE_FILE" ]; then
+            # Update the ui-ux-pro-max plugin entry
+            jq \
+              --arg version "$VERSION" \
+              --arg description "$DESCRIPTION" \
+              --argjson keywords "$KEYWORDS" \
+              '.plugins[] |= if .name == "ui-ux-pro-max" then 
+                .version = $version | 
+                .description = $description | 
+                .keywords = $keywords 
+              else . end' \
+              "$MARKETPLACE_FILE" > "$MARKETPLACE_FILE.tmp"
+            
+            mv "$MARKETPLACE_FILE.tmp" "$MARKETPLACE_FILE"
+            echo "✓ Updated $MARKETPLACE_FILE"
+          else
+            echo "ERROR: $MARKETPLACE_FILE not found"
+            exit 1
+          fi
+
+      - name: Show git diff
+        run: |
+          echo "=== Git Status ==="
+          git status
+          echo ""
+          echo "=== Git Diff (first 200 lines) ==="
+          git diff --color=never | head -200
+
+      - name: Commit and push to main
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure git
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          # Check if there are changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "ℹ No changes detected. Nothing to commit."
+            exit 0
+          fi
+
+          # Commit changes
+          VERSION="${{ steps.upstream_meta.outputs.version }}"
+          git add .
+          git commit -m "sync(ui-ux-pro-max): update skills and metadata to v${VERSION}"
+
+          # Push to main branch
+          git push origin main
+          echo "✓ Pushed changes to main branch"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Remove upstream clone and downloaded files
+          rm -rf upstream-repo tmp upstream.zip
+          echo "✓ Cleaned up temporary files and folders"
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.upstream_meta.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes were made (all up-to-date)." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✓ Updated skill files and manifests" >> $GITHUB_STEP_SUMMARY
+          fi
