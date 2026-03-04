@@ -28,11 +28,17 @@
     },
     {
       "name": "superpowers",
-      "source": "https://github.com/obra/superpowers.git"
+      "source": {
+        "source": "url",
+        "url": "https://github.com/obra/superpowers.git"
+      }
     },
     {
       "name": "ui-ux-pro-max",
-      "source": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"
+      "source": {
+        "source": "url",
+        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"
+      }
     }
   ]
 }
