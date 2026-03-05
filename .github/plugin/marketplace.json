@@ -31,7 +31,10 @@
       "source": {
         "source": "url",
         "url": "https://github.com/obra/superpowers.git"
-      }
+      },
+      "version": "4.3.1",
+      "description": "Core skills library for Claude Code: TDD, debugging, collaboration patterns, and proven techniques",
+      "keywords": null
     },
     {
       "name": "ui-ux-pro-max",
