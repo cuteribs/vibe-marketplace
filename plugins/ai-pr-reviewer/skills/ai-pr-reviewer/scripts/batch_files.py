@@ -3,7 +3,7 @@
 Batch Files for PR Review
 
 Groups PR changed files into optimal batches for parallel review by sub-agents.
-Uses tiktoken for accurate token counting to stay under context window limits.
+Estimates token budget using file size (4 bytes per token heuristic).
 
 Usage:
     python batch_files.py <manifest_path> <output_dir> [--max-tokens 90000] [--overhead 20000]
@@ -17,13 +17,6 @@ import json
 import sys
 from pathlib import Path
 from typing import Optional
-
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-    print("Warning: tiktoken not installed. Using character-based estimation.", file=sys.stderr)
 
 
 # Path separator for escaped filenames
@@ -116,28 +109,6 @@ def should_exclude(filepath: str) -> bool:
     return False
 
 
-def count_tokens(text: str, encoding_name: str = "cl100k_base") -> int:
-    """Count tokens in text using tiktoken or fallback to char estimation."""
-    if TIKTOKEN_AVAILABLE:
-        try:
-            encoding = tiktoken.get_encoding(encoding_name)
-            return len(encoding.encode(text))
-        except Exception:
-            pass
-    # Fallback: ~4 chars per token
-    return len(text) // 4
-
-
-def read_file_content(file_path: Path) -> str:
-    """Read file content, returning empty string if file doesn't exist."""
-    if file_path.exists():
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                return f.read()
-        except Exception as e:
-            print(f"Error reading file {file_path}: {e}", file=sys.stderr)
-            return ""
-    return ""
 
 
 def create_batches(
@@ -145,7 +116,7 @@ def create_batches(
     output_dir: str,
     max_tokens: int = 90000,
     overhead_tokens: int = 20000,
-    delete_source_files: bool = True
+    delete_source_files: bool = False
 ) -> dict:
     """
     Create optimal batches from manifest file.
@@ -155,7 +126,7 @@ def create_batches(
         output_dir: Directory to write batch JSON files
         max_tokens: Maximum tokens per batch (default: 90K)
         overhead_tokens: Reserved tokens for prompts/guidelines (default: 20K)
-        delete_source_files: Delete source files after batching (default: True)
+        delete_source_files: Delete source files after batching (default: False)
 
     Returns:
         Summary dict with batch information
@@ -196,22 +167,11 @@ def create_batches(
             continue
 
         # Track files for potential cleanup
-        if escaped_name:
-            files_to_delete.append(pr_changes_dir / escaped_name)
-        if diff_name:
-            files_to_delete.append(pr_changes_dir / diff_name)
-
-        # Read file content and diff content
-        content = ""
-        diff = ""
-        if escaped_name:
-            content = read_file_content(pr_changes_dir / escaped_name)
-        if diff_name:
-            diff = read_file_content(pr_changes_dir / diff_name)
-
-        # Add content to file_info for batching
-        file_info["content"] = content
-        file_info["diff"] = diff
+        if delete_source_files:
+            if escaped_name:
+                files_to_delete.append(pr_changes_dir / escaped_name)
+            if diff_name:
+                files_to_delete.append(pr_changes_dir / diff_name)
 
         if stack not in stacks:
             stacks[stack] = []
@@ -230,10 +190,8 @@ def create_batches(
         current_batch_tokens = 0
         
         for file_info in files:
-            # Count tokens for this file
-            content = file_info.get("content", "")
-            diff = file_info.get("diff", "")
-            file_tokens = count_tokens(content) + count_tokens(diff)
+            # Estimate tokens from file sizes (~4 bytes per token)
+            file_tokens = (file_info.get("sizeBytes", 0) + file_info.get("diffSizeBytes", 0)) // 4
             
             # Check if adding this file would exceed the limit
             if current_batch_tokens + file_tokens > available_tokens and current_batch_files:
@@ -243,6 +201,7 @@ def create_batches(
                     "tech_stack": stack,
                     "file_count": len(current_batch_files),
                     "total_tokens": current_batch_tokens,
+                    "pr_changes_dir": str(pr_changes_dir),
                     "files": current_batch_files
                 })
                 batch_number += 1
@@ -252,8 +211,10 @@ def create_batches(
             # Add file to current batch (using original_path as key)
             original_path = file_info.get("originalPath", "")
             current_batch_files[original_path] = {
-                "content": content,
-                "diff": diff
+                "escaped_name": file_info.get("escapedName", ""),
+                "diff_name": file_info.get("diffName", ""),
+                "size_bytes": file_info.get("sizeBytes", 0),
+                "diff_size_bytes": file_info.get("diffSizeBytes", 0)
             }
             current_batch_tokens += file_tokens
         
@@ -264,6 +225,7 @@ def create_batches(
                 "tech_stack": stack,
                 "file_count": len(current_batch_files),
                 "total_tokens": current_batch_tokens,
+                "pr_changes_dir": str(pr_changes_dir),
                 "files": current_batch_files
             })
             batch_number += 1
@@ -347,9 +309,9 @@ def main():
         help="Reserved tokens for prompts/guidelines (default: 20000)"
     )
     parser.add_argument(
-        "--no-delete",
+        "--delete",
         action="store_true",
-        help="Do not delete source files after batching"
+        help="Delete source files after batching (default: keep files)"
     )
 
     args = parser.parse_args()
@@ -360,7 +322,7 @@ def main():
             args.output_dir,
             args.max_tokens,
             args.overhead,
-            delete_source_files=not args.no_delete
+            delete_source_files=args.delete
         )
 
         print(f"✅ Created {summary['total_batches']} batches")

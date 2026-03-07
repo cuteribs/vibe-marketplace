@@ -14,10 +14,10 @@ This skill reviews Azure DevOps pull requests with intelligent batching for larg
 ```
 1. Parse PR URL → Extract org/project/repo/pr_id
 2. Fetch PR changes via MCP → Save to {session}/pr-changes/
-3. Run batch_files.py → Create batches with embedded content, delete source files
+3. Run batch_files.py → Create batches with file metadata and file list, source files kept
 4. Spawn sub-agents (parallel, background) → Review each batch simultaneously
 5. Each sub-agent:
-    - Reads batch JSON (contains all file content and diffs)
+    - Reads batch JSON (file list + metadata), reads actual files from pr-changes/
     - Reads tech-stack guidelines
     - Reviews files against guidelines
     - Posts negative comments to PR via MCP
@@ -99,17 +99,17 @@ python "{skill_path}/scripts/batch_files.py" "{session}/pr-changes/manifest.json
 - Groups files by tech stack (dotnet, frontend, python, config)
 - Excludes lock files, generated files, binaries
 - Creates batches under 90K token limit (with 20K overhead reserve)
-- **Embeds file content and diff directly in batch JSON files**
-- **Deletes source files from pr-changes folder after batching** (keeps manifest.json only)
+- **Stores file metadata only** (paths, sizes) — no content embedded in batch JSON
+- **Keeps all source files** in pr-changes folder — sub-agents read them directly
 
 **Output:**
 ```
 {session}/batches/
 ├── batch-summary.json          # Overview of all batches
-├── batch-1-dotnet.json         # .NET files batch (with embedded content)
-├── batch-2-frontend.json       # Frontend files batch (with embedded content)
-├── batch-3-python.json         # Python files batch (with embedded content)
-└── batch-4-config.json         # Config files batch (with embedded content)
+├── batch-1-dotnet.json         # .NET files batch (metadata only)
+├── batch-2-frontend.json       # Frontend files batch (metadata only)
+├── batch-3-python.json         # Python files batch (metadata only)
+└── batch-4-config.json         # Config files batch (metadata only)
 ```
 
 **Batch JSON Structure (path-as-key):**
@@ -119,20 +119,25 @@ python "{skill_path}/scripts/batch_files.py" "{session}/pr-changes/manifest.json
   "tech_stack": "dotnet",
   "file_count": 5,
   "total_tokens": 45000,
+  "pr_changes_dir": "{session}/pr-changes",
   "files": {
     "src/services/UserService.cs": {
-      "content": "// Full file content here...",
-      "diff": "@@ -10,5 +10,8 @@ diff content here..."
+      "escaped_name": "src~~~services~~~UserService.cs",
+      "diff_name": "src~~~services~~~UserService.cs.diff",
+      "size_bytes": 1234,
+      "diff_size_bytes": 567
     },
     "src/controllers/OrderController.cs": {
-      "content": "// Full file content...",
-      "diff": "@@ -1,3 +1,5 @@ diff..."
+      "escaped_name": "src~~~controllers~~~OrderController.cs",
+      "diff_name": "src~~~controllers~~~OrderController.cs.diff",
+      "size_bytes": 890,
+      "diff_size_bytes": 210
     }
   }
 }
 ```
 
-**Important:** After batching, the pr-changes folder will only contain `manifest.json`. All file content and diffs are embedded in the batch JSON files. Sub-agents should ONLY read batch files, not the pr-changes folder.
+**Important:** Source files remain in `pr-changes/` after batching. Sub-agents read files directly using the `escaped_name` and `diff_name` paths from the batch JSON, combined with `pr_changes_dir`.
 
 ## Step 4: Spawn Sub-agents for Parallel Review
 
@@ -175,6 +180,7 @@ Read the guidelines file before reviewing:
 - For config: Review for syntax correctness, security (no hardcoded secrets), and best practices
 
 ## Files to Review
+
 Read the batch file: {session}/batches/batch-{batch_number}-{tech_stack}.json
 
 The batch JSON has this structure:
@@ -182,21 +188,32 @@ The batch JSON has this structure:
 {
   "batch_number": N,
   "tech_stack": "dotnet|frontend|python|config",
+  "pr_changes_dir": "/path/to/session/pr-changes",
   "files": {
     "path/to/file.cs": {
-      "content": "full file content",
-      "diff": "diff showing changes"
+      "escaped_name": "path~~~to~~~file.cs",
+      "diff_name": "path~~~to~~~file.cs.diff",
+      "size_bytes": 1234,
+      "diff_size_bytes": 567
     }
   }
 }
 ```
 
 For each file path in the `files` object:
-1. Review the `content` (full file)
-2. Focus on changed lines shown in the `diff`
-3. The key is the original file path (use this for posting comments)
+1. Read the full file content: `{pr_changes_dir}/{escaped_name}`
+2. Read the diff: `{pr_changes_dir}/{diff_name}` (may not exist for new files)
+3. Focus your review on changed lines shown in the diff
+4. Use the original file path key for posting comments
 
-**IMPORTANT:** All file content is embedded in the batch JSON. Do NOT look for files in pr-changes folder.
+## LSP Analysis (best-effort)
+
+If your environment provides LSP tools, use them to enrich the review. Useful LSP operations:
+- **Go to definition** — understand what a changed function/class actually does
+- **Find references** — see how many callers a modified function has (useful for assessing impact of changes)
+- **Hover / type info** — verify types for suspicious parameters or return values
+
+LSP tools vary by agent environment (Claude Code, OpenCode, Copilot-CLI, etc.) — use whatever is available. Skip this step if no LSP tools are accessible.
 
 ## Severity Levels
 - **Critical**: Security vulnerabilities, data loss risks, production crashes, blocking bugs
@@ -267,7 +284,7 @@ python -c "import shutil; shutil.rmtree(r'{session}')"
 ```
 
 This removes:
-- `{session}/pr-changes/manifest.json` (only remaining file after batching)
+- `{session}/pr-changes/manifest.json` and all downloaded source files/diffs
 - `{session}/batches/*.json` (all batch files)
 - `{session}/*.md` (all summary files)
 - The entire session directory
@@ -328,7 +345,7 @@ Files are classified by extension:
 
 These files are automatically excluded from review:
 - Lock files: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Pipfile.lock`, `poetry.lock`, `packages.lock.json`
-- Generated: `*.min.js`, `*.min.css`, `*.d.ts`, `*.g.cs`, `*.Designer.cs`
+- Generated: `*.min.js`, `*.min.css`, `*.d.ts`, `*.g.cs`, `*.Designer.cs`, `*.generated.cs`
 - Binaries: Images, fonts, compiled files
 - Misc: `.gitignore`, `.editorconfig`
 
@@ -337,7 +354,7 @@ These files are automatically excluded from review:
 ## Resources
 
 ### scripts/batch_files.py
-Python script that creates optimal batches for review. Uses tiktoken for accurate token counting.
+Python script that creates optimal batches for review. Estimates token budget using file size (4 bytes per token heuristic).
 
 ### references/
 - `pr-review-strategy.md` - General review strategy
@@ -353,7 +370,7 @@ Python script that creates optimal batches for review. Uses tiktoken for accurat
 **Agent Response:**
 1. Parses URL → myOrg.visualstudio.com/myProject/Engineering%20China/dapr-shop/1234
 2. Fetches changes via MCP → 87 files downloaded to session folder
-3. Creates batches → 4 batches (32 .NET, 41 frontend, 11 python, 3 config files), deletes source files
+3. Creates batches → 4 batches (32 .NET, 41 frontend, 11 python, 3 config files), source files kept in pr-changes/
 4. Reviews in parallel → Spawns 4 background sub-agents, posts 23 comments
 5. Consolidates → Returns summary with 2 Critical, 5 Major, 12 Minor findings
 6. Cleanup → Deletes session folder
