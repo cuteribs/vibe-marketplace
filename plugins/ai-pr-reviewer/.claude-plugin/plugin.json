@@ -12,15 +12,18 @@
         "code-review"
     ],
     "mcpServers": {
-        "adp-pr-helper": {
+        "ado-pr-helper": {
+            "type": "local",
             "command": "npx",
             "args": [
-                "dnx",
                 "-y",
-                "AdoPrHelperMcp",
+                "@cuteribs/adopr-helper-mcp",
                 "-a",
                 "pat"
-            ]
+            ],
+            "env": {
+                "AZURE_DEVOPS_PAT": "%AZURE_DEVOPS_PAT%"
+            }
         }
     }
 }
