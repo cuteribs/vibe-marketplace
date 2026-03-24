@@ -11,7 +11,11 @@
   "plugins": [
     {
       "name": "ai-pr-reviewer",
-      "source": "./plugins/ai-pr-reviewer",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/cuteribs/vibe-marketplace.git",
+        "path": "plugins/ai-pr-reviewer"
+      },
       "description": "AI-powered Azure DevOps pull request reviewer that provides suggestions, guidance, and annotated feedback for PRs.",
       "version": "1.0.0",
       "author": {
@@ -20,7 +24,11 @@
     },
     {
       "name": "banana2",
-      "source": "./plugins/banana2",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/cuteribs/vibe-marketplace.git",
+        "path": "plugins/banana2"
+      },
       "description": "A formalized tool for generating hyper-realistic, highly-controlled images using the Nano Banana 2 (Gemini 3.1 Flash) model through parameterized JSON prompting.",
       "version": "1.0.0",
       "author": {
