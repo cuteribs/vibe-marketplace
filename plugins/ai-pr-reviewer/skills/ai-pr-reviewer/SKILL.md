@@ -11,6 +11,9 @@ This skill reviews Azure DevOps pull requests with intelligent batching for larg
 
 ## Workflow Overview
 
+STRICTLY follow the workflow below for every PR review request.
+DO NOT skip, merge, or reorder any steps. Each step is crucial for ensuring a thorough and efficient review process.
+
 ```
 1. Parse PR URL → Extract org/project/repo/pr_id
 2. Fetch PR changes via MCP → Save to {session}/pr-changes/
@@ -213,7 +216,7 @@ If your environment provides LSP tools, use them to enrich the review. Useful LS
 - **Find references** — see how many callers a modified function has (useful for assessing impact of changes)
 - **Hover / type info** — verify types for suspicious parameters or return values
 
-LSP tools vary by agent environment (Claude Code, OpenCode, Copilot-CLI, etc.) — use whatever is available. Skip this step if no LSP tools are accessible.
+Use whatever is available. Skip this step if no LSP tools are accessible.
 
 ## Severity Levels
 - **Critical**: Security vulnerabilities, data loss risks, production crashes, blocking bugs
