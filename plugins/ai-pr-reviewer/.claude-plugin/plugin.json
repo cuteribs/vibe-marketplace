@@ -14,15 +14,15 @@
     "mcpServers": {
         "ado-pr-helper": {
             "type": "local",
-            "command": "npx",
+            "command": "dnx",
             "args": [
                 "-y",
-                "@cuteribs/adopr-helper-mcp",
+                "AdoPrHelperMcp",
                 "-a",
                 "pat"
             ],
             "env": {
-                "AZURE_DEVOPS_PAT": "%AZURE_DEVOPS_PAT%"
+                "AZURE_DEVOPS_PAT": "$AZURE_DEVOPS_PAT"
             }
         }
     }
