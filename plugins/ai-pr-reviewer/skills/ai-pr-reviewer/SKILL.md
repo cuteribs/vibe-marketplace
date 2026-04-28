@@ -1,6 +1,6 @@
 ---
 name: ai-pr-reviewer
-description: Use this skill to review an Azure DevOps PR. Requires PR_URL. Supports optional MODE argument (simple|full, default: simple). Use whenever a user asks to review, check, or audit an Azure DevOps pull request, even if they don't explicitly mention a mode.
+description: Use this skill to review an Azure DevOps PR. Requires PR_URL. Supports optional MODE argument (simple|full, default > simple). Use whenever a user asks to review, check, or audit an Azure DevOps pull request, even if they don't explicitly mention a mode.
 ---
 
 # AI PR Reviewer
