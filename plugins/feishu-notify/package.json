@@ -1,0 +1,20 @@
+{
+  "name": "feishu-notify",
+  "version": "1.0.0",
+  "description": "Claude Code hook integration that sends status notifications to Feishu",
+  "main": "scripts/feishu_notify.js",
+  "scripts": {
+    "test": "node scripts/feishu_notify.js --text 'Test notification'"
+  },
+  "keywords": [
+    "feishu",
+    "notifications",
+    "hooks",
+    "claude-code"
+  ],
+  "author": "Claude Code",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}

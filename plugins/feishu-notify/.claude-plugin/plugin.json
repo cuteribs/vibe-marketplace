@@ -1,0 +1,51 @@
+{
+  "name": "feishu-notify",
+  "description": "Claude Code hook integration that sends status notifications to Feishu (enterprise collaboration platform)",
+  "version": "1.0.0",
+  "author": {
+    "name": "Claude Code"
+  },
+  "keywords": [
+    "feishu",
+    "notifications",
+    "hooks",
+    "integration"
+  ],
+  "hooks": {
+    "Notification": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Waiting Notification"],
+      "events": ["*"]
+    },
+    "PermissionRequest": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Waiting Permission Request"],
+      "events": ["*"]
+    },
+    "SessionEnd": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Session Ended"],
+      "events": ["*"]
+    },
+    "Stop": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Idle Stop"],
+      "events": ["*"]
+    },
+    "SubagentStart": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Idle SubagentStart"],
+      "events": ["*"]
+    },
+    "UserPromptSubmit": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Busy UserPromptSubmit"],
+      "events": ["*"]
+    },
+    "PreToolUse": {
+      "command": "node",
+      "args": ["{pluginDir}/scripts/feishu_notify.js", "--text", "Busy PreToolUse"],
+      "events": ["*"]
+    }
+  }
+}
