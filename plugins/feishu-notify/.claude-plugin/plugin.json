@@ -3,7 +3,7 @@
   "description": "Claude Code hook integration that sends status notifications to Feishu (enterprise collaboration platform)",
   "version": "1.0.0",
   "author": {
-    "name": "Claude Code"
+    "name": "cuteribs"
   },
   "keywords": [
     "feishu",
